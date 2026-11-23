@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <bit>
 #include <stdexcept>
+#include <unordered_set>
 
 namespace ShaderRecompiler {
 
@@ -199,6 +200,31 @@ void IrValue::Invalidate() {
     }
     phiBlocks.clear();
     opcode = IrOpcode::Unreachable;
+}
+
+void IrValue::InvalidateBatch(std::span<IrValue* const> values) {
+    std::unordered_set<IrValue*> operands;
+    for (const auto* value : values) {
+        if (value->HasUses()) {
+            throw std::runtime_error("IrValue::InvalidateBatch called on a value that still has uses");
+        }
+        for (auto* operand : value->arguments) {
+            if (operand != nullptr) operands.insert(operand);
+        }
+    }
+    for (auto* value : values) {
+        for (std::size_t index = 0; index < value->arguments.size(); ++index) {
+            value->arguments[index] = nullptr;
+        }
+        value->phiBlocks.clear();
+        value->opcode = IrOpcode::Unreachable;
+    }
+    // Unlink removed users once per producer and keep the order of the surviving uses.
+    for (auto* operand : operands) {
+        std::erase_if(operand->operandUses, [&](const IrUse& use) {
+            return use.user->arguments[use.operand] != operand;
+        });
+    }
 }
 
 void IrValue::ReplaceUsesWith(IrValue* replacement, bool preserve) {

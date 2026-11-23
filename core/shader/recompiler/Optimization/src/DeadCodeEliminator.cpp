@@ -5,6 +5,7 @@
 namespace ShaderRecompiler {
 
 void DeadCodeEliminator::RemoveIdentities(std::span<IrBlock* const> blocks) const {
+    std::vector<IrValue*> removed;
     for (IrBlock* block : blocks) {
         auto& instructions = block->Instructions();
         for (auto it = instructions.begin(); it != instructions.end();) {
@@ -14,11 +15,15 @@ void DeadCodeEliminator::RemoveIdentities(std::span<IrBlock* const> blocks) cons
                 continue;
             }
             IrValue* replacement = inst->Argument(0);
-            inst->ReplaceUsesWith(replacement, false);
+            if (replacement != inst) {
+                inst->ReplaceAllUsesWith(replacement);
+                removed.push_back(inst);
+            }
             it = instructions.erase(it);
             inst->SetParent(nullptr);
         }
     }
+    IrValue::InvalidateBatch(removed);
 }
 
 void DeadCodeEliminator::RemoveIdentities(IrProgram& program) const {

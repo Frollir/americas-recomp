@@ -118,6 +118,33 @@ void CheckTailArgumentRemoval() {
     Require(!source->HasUses() && first->Argument(0) == nullptr);
 }
 
+void CheckBatchInvalidation() {
+    const auto initialize = [](Graph& graph) {
+        auto* source = graph.Value(0);
+        graph.Value(1)->AddArgument(source);
+        graph.Value(2)->AddArgument(source);
+        graph.Value(3)->AddArgument(source);
+        graph.Value(2)->AddArgument(source);
+        graph.Value(4)->AddArgument(source);
+        graph.Value(3)->AddArgument(graph.Value(1));
+    };
+    Graph actual(5), reference(5);
+    initialize(actual);
+    initialize(reference);
+    IrValue* const invalidBatch[]{actual.Value(2), actual.Value(1)};
+    try {
+        IrValue::InvalidateBatch(invalidBatch);
+        throw std::logic_error("batch accepted a value with a surviving use");
+    } catch (const std::runtime_error&) {
+        EqualGraphs(actual, reference);
+    }
+    IrValue* const unused[]{actual.Value(2), actual.Value(4)};
+    IrValue::InvalidateBatch(unused);
+    reference.Value(2)->Invalidate();
+    reference.Value(4)->Invalidate();
+    EqualGraphs(actual, reference);
+}
+
 void CheckSelfAndEmpty() {
     Graph graph(3);
     graph.Value(2)->AddArgument(graph.Value(0));
@@ -273,6 +300,7 @@ int main() {
         const std::pair<const char*, void (*)()> cases[] = {
             {"ordered duplicate operands", CheckSimpleReplacement},
             {"tail argument removal", CheckTailArgumentRemoval},
+            {"batch invalidation", CheckBatchInvalidation},
             {"self and empty replacement", CheckSelfAndEmpty},
             {"phi and identity rewriting", CheckPhiAndIdentity},
             {"phi preserve clears phi blocks", CheckPhiPreserveClearsPhiBlocks},
@@ -286,7 +314,7 @@ int main() {
             current = name;
             test();
         }
-        std::puts("10 IR rewrite suites passed; 2000 differential use graphs and 48000 mutation comparisons");
+        std::puts("11 IR rewrite suites passed; 2000 differential use graphs and 48000 mutation comparisons");
         return 0;
     } catch (const std::exception& error) {
         failureAfter = -1;
