@@ -10,6 +10,7 @@
 #include <memory>
 #include <memory_resource>
 #include <ranges>
+#include <span>
 #include <stdexcept>
 #include <type_traits>
 #include <vector>
@@ -203,6 +204,7 @@ public:
     void SetDetachedOperands(std::vector<IrValue*> arguments, std::vector<IrBlock*> phiBlocks);
     void ReplaceOpcode(IrOpcode opcode);
     void Invalidate();
+    static void InvalidateBatch(std::span<IrValue* const> values);
     void ReplaceUsesWith(IrValue* replacement, bool preserve);
     [[nodiscard]] bool operator==(const IrValue& other) const;
 
